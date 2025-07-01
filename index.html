@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Fair UI & Controlled Spin Wheel (Final Fix)</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; overflow-x: hidden; }
+    .wheel-container { position: relative; width: 300px; height: 300px; margin: 0 auto; }
+    .wheel { width: 100%; height: 100%; border-radius: 50%; border: 10px solid #333; position: relative; background: conic-gradient(#f44336 0deg 120deg, #2196f3 120deg 240deg, #4caf50 240deg 360deg); transition: transform 8s cubic-bezier(0.33, 1, 0.68, 1); }
+    .needle { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-bottom: 30px solid #000; z-index: 10; }
+    .label { position: absolute; width: 100%; height: 100%; top: 0; left: 0; pointer-events: none; }
+    .label span { position: absolute; top: 50%; left: 50%; transform-origin: 0 0; font-size: 18px; font-weight: bold; color: white; }
+    .label .one   { transform: rotate(60deg)  translate(0, -130px) rotate(-60deg); }
+    .label .two   { transform: rotate(180deg) translate(0, -130px) rotate(-180deg); }
+    .label .three { transform: rotate(300deg) translate(0, -130px) rotate(-300deg); }
+    #result { margin-top: 20px; font-size: 24px; font-weight: bold; }
+    button { margin-top: 30px; padding: 10px 20px; font-size: 18px; cursor: pointer; }
+    canvas { position: fixed; top: 0; left: 0; pointer-events: none; z-index: 9999; }
+  </style>
+</head>
+<body>
+
+  <h1>Spin the Wheel</h1>
+  <p>The wheel looks fair distributed in 3 segments. The prizes are controlled (50/30/20 split).</p>
+  <div class="wheel-container">
+    <div class="needle"></div>
+    <div class="wheel" id="wheel">
+      <div class="label">
+        <span class="one">₹100</span>
+        <span class="two">₹200</span>
+        <span class="three">₹300</span>
+      </div>
+    </div>
+  </div>
+
+  <button id="spinBtn">Spin</button>
+  <div id="result"></div>
+  <p>Prizes remaining in this batch: <span id="prizesLeft">100</span></p>
+
+  <audio id="spinSound" preload="auto">
+    <source src="https://www.soundjay.com/mechanical/sounds/mechanical-gear-01.mp3" type="audio/mpeg">
+  </audio>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <script>
+    const wheel = document.getElementById('wheel');
+    const result = document.getElementById('result');
+    const spinSound = document.getElementById('spinSound');
+    const spinBtn = document.getElementById('spinBtn');
+    const prizesLeftSpan = document.getElementById('prizesLeft');
+
+    let prizePool = [];
+    let currentRotation = 0;
+
+    const prizeSegments = {
+      100: { min: 1, max: 119 },
+      200: { min: 121, max: 239 },
+      300: { min: 241, max: 359 }
+    };
+
+    function createAndShufflePool() {
+      const pool = [];
+      for (let i = 0; i < 50; i++) pool.push(100);
+      for (let i = 0; i < 30; i++) pool.push(200);
+      for (let i = 0; i < 20; i++) pool.push(300);
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      return pool;
+    }
+
+    function getTargetAngle(prize) {
+      const segment = prizeSegments[prize];
+      return Math.floor(Math.random() * (segment.max - segment.min + 1)) + segment.min;
+    }
+
+    prizePool = createAndShufflePool();
+    prizesLeftSpan.textContent = prizePool.length;
+
+    spinBtn.addEventListener('click', () => {
+      if (spinBtn.disabled) return;
+      if (prizePool.length === 0) {
+        alert("The prize pool is empty! Reloading a new batch of 100 prizes.");
+        prizePool = createAndShufflePool();
+      }
+
+      spinBtn.disabled = true;
+      result.textContent = '';
+      
+      const winningPrize = prizePool.pop();
+      prizesLeftSpan.textContent = prizePool.length;
+
+      // --- START OF CORRECTED LOGIC ---
+
+      // 1. Determine the final resting spot for the needle.
+      const targetAngle = getTargetAngle(winningPrize);
+      const landingSpot = 360 - targetAngle; // The wheel's final angle must be this to land correctly.
+
+      // 2. Find the current remainder of the wheel's rotation.
+      const currentRemainder = currentRotation % 360;
+
+      // 3. Calculate the extra degrees needed to get from the current position to the target.
+      // This ensures the wheel lands exactly where it should, regardless of its start position.
+      const adjustment = (360 - currentRemainder + landingSpot) % 360;
+
+      // 4. Add the guaranteed 20 full rotations plus the adjustment to the total.
+      const fullSpins = 360 * 20;
+      currentRotation += fullSpins + adjustment;
+
+      // --- END OF CORRECTED LOGIC ---
+
+      wheel.style.transform = `rotate(${currentRotation}deg)`;
+
+      spinSound.currentTime = 0;
+      spinSound.play().catch(e => console.warn("Sound blocked."));
+
+      setTimeout(() => {
+        result.textContent = `🎉 You won ₹${winningPrize}! 🎉`;
+        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+        spinBtn.disabled = false;
+      }, 8000);
+    });
+  </script>
+
+</body>
+</html>
